@@ -28,7 +28,8 @@ CATALOG_OPTIONS = [
     "Soundarya",
     "Malai Crape",
     "Sweet Sixteen",
-    "Heritage",
+    "Heritage"
+    "Srivalli",
     "Shakuntala",
 ]
 DEFAULT_SUGGEST_START = 4000

@@ -1,8 +1,8 @@
 streamlit
 Pillow
 rembg
+opencv-python-headless
 onnxruntime
-opencv-python
 numpy
 scikit-image
 scipy

@@ -28,7 +28,7 @@ CATALOG_OPTIONS = [
     "Soundarya",
     "Malai Crape",
     "Sweet Sixteen",
-    "Heritage"
+    "Heritage",
     "Srivalli",
     "Shakuntala",
 ]

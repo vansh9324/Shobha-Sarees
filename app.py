@@ -3,6 +3,11 @@ from PIL import Image
 import io
 import hashlib
 import base64
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 from platemaker_module import PlateMaker
 from google_drive_uploader import DriveUploader
@@ -11,11 +16,20 @@ st.set_page_config(page_title="Shobha Sarees Platemaker Dashboard", layout="wide
 st.title("🎨 Shobha Sarees Platemaker Dashboard")
 
 # -----------------------------------------------------------------------------
-# Services (unchanged contracts)
+# Services (with error handling)
 # -----------------------------------------------------------------------------
 @st.cache_resource
 def init_services():
-    return PlateMaker(), DriveUploader()
+    try:
+        platemaker = PlateMaker()
+        st.success("✅ PlateMaker initialized successfully")
+        drive_uploader = DriveUploader()
+        st.success("✅ DriveUploader initialized successfully")
+        return platemaker, drive_uploader
+    except Exception as e:
+        st.error(f"❌ Failed to initialize services: {str(e)}")
+        logger.error("Failed to initialize services", exc_info=True)
+        st.stop()
 
 platemaker, drive_uploader = init_services()
 
@@ -29,7 +43,6 @@ CATALOG_OPTIONS = [
     "Malai Crape",
     "Sweet Sixteen",
     "Heritage",
-    "Srivalli",
     "Shakuntala",
 ]
 DEFAULT_SUGGEST_START = 4000
@@ -89,27 +102,31 @@ def derive_fields(catalog, dn):
     return banner, output, folder
 
 def process_and_upload_image(uploaded_file, catalog, design_number, status_cb):
-    uploaded_file.seek(0)
-    status_cb("🚀 Starting processing...")
-    processed_img = platemaker.process_image(
-        uploaded_file,
-        catalog,
-        design_number,
-        status_callback=status_cb,
-    )
-    output_filename = f"{catalog} - {design_number}.jpg"
-    status_cb("💾 Converting to upload format...")
-    img_bytes = io.BytesIO()
-    processed_img.save(img_bytes, format="JPEG", quality=100)
-    img_bytes.seek(0)
-    status_cb("☁️ Uploading to Google Drive...")
-    drive_url = drive_uploader.upload_image(
-        img_bytes,
-        output_filename,
-        catalog,
-    )
-    status_cb("✅ Uploaded • [Drive](" + drive_url + ")")
-    return output_filename, drive_url
+    try:
+        uploaded_file.seek(0)
+        status_cb("🚀 Starting processing...")
+        processed_img = platemaker.process_image(
+            uploaded_file,
+            catalog,
+            design_number,
+            status_callback=status_cb,
+        )
+        output_filename = f"{catalog} - {design_number}.jpg"
+        status_cb("💾 Converting to upload format...")
+        img_bytes = io.BytesIO()
+        processed_img.save(img_bytes, format="JPEG", quality=100)
+        img_bytes.seek(0)
+        status_cb("☁️ Uploading to Google Drive...")
+        drive_url = drive_uploader.upload_image(
+            img_bytes,
+            output_filename,
+            catalog,
+        )
+        status_cb("✅ Uploaded • [Drive](" + drive_url + ")")
+        return output_filename, drive_url
+    except Exception as e:
+        logger.error(f"Error in process_and_upload_image: {e}", exc_info=True)
+        raise
 
 # -----------------------------------------------------------------------------
 # Top navigation
@@ -175,7 +192,7 @@ with tab_batch:
                         help="Apply once to set Catalog for all rows; manual per-row changes remain allowed.",
                         key="batch_bulk_catalog",
                     )
-                    if st.button("✅ Apply to all", use_container_width=True, key="batch_apply_default_catalog"):
+                    if st.button("✅ Apply to all", width="stretch", key="batch_apply_default_catalog"):
                         for uid in st.session_state["batch_row_order"]:
                             row = st.session_state["batch_rows"][uid]
                             row["catalog"] = bulk_catalog
@@ -287,7 +304,7 @@ with tab_batch:
             st.data_editor(
                 display_rows,
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
                 column_config=col_config,
                 column_order=col_order,
                 num_rows="fixed",
@@ -296,7 +313,7 @@ with tab_batch:
             )
 
         st.divider()
-        if st.button("🚀 Process & Upload (Batch)", type="primary", use_container_width=True, key="batch_submit"):
+        if st.button("🚀 Process & Upload (Batch)", type="primary", width="stretch", key="batch_submit"):
             if not batch_files:
                 st.error("❌ Please upload at least one image first.")
             else:
@@ -331,13 +348,26 @@ with tab_batch:
 
                         def cb(msg, i=idx, b=box):
                             b.markdown(f"Image {i+1}: {msg}")
+                            logger.info(f"Image {i+1}: {msg}")
 
                         try:
+                            # Debug: File info
+                            st.write(f"🔍 Processing file: {uf.name}, Size: {uf.size} bytes")
+                            # Ensure file pointer is at start
+                            uf.seek(0)
+                            # Debug: Read file
+                            file_bytes = uf.read()
+                            st.write(f"✅ Read {len(file_bytes)} bytes from file")
+                            # Reset file pointer for processing
+                            uf.seek(0)
                             filename, url = process_and_upload_image(uf, cat, dn, cb)
                             box.markdown(f"Image {idx+1}: ✅ Uploaded • [Drive]({url})")
                             results.append({"filename": filename, "catalog": cat, "url": url, "status": "success"})
                         except Exception as e:
-                            box.error(f"Image {idx+1}: ❌ Error: {e}")
+                            error_msg = f"❌ Error processing {uf.name}: {str(e)}"
+                            box.error(f"Image {idx+1}: {error_msg}")
+                            st.error(error_msg)
+                            logger.error(error_msg, exc_info=True)
                             results.append({"filename": f"Image {idx+1}", "catalog": cat, "url": None, "status": "error", "error": str(e)})
 
                         progress.progress((idx + 1) / len(batch_files))
@@ -402,7 +432,7 @@ with tab_simple:
             with col1:
                 try:
                     image = Image.open(uploaded_file)
-                    st.image(image, use_column_width=True)
+                    st.image(image, width="stretch")
                 except Exception as e:
                     st.warning(f"Could not preview Image {idx + 1}: {uploaded_file.name} ({e})")
                 st.caption(f"Image {idx + 1}: {uploaded_file.name}")
@@ -426,7 +456,7 @@ with tab_simple:
                     )
 
     st.divider()
-    if st.button("🚀 Process & Upload (Simple)", type="primary", use_container_width=True, key="simple_submit"):
+    if st.button("🚀 Process & Upload (Simple)", type="primary", width="stretch", key="simple_submit"):
         if not selected_catalog:
             st.error("❌ Please select a catalog!")
         elif not simple_files:
@@ -448,14 +478,24 @@ with tab_simple:
 
                     def cb(msg, i=idx, b=box):
                         b.markdown(f"**Image {i + 1}:** {msg}")
+                        logger.info(f"Simple Mode Image {i+1}: {msg}")
 
                     try:
+                        # Debug: File info
+                        st.write(f"🔍 Processing file: {uploaded_file.name}, Size: {uploaded_file.size} bytes")
+                        uploaded_file.seek(0)
+                        file_bytes = uploaded_file.read()
+                        st.write(f"✅ Read {len(file_bytes)} bytes from file")
+                        uploaded_file.seek(0)
                         dn = st.session_state["simple_design_numbers"][idx]
                         filename, url = process_and_upload_image(uploaded_file, selected_catalog, dn, cb)
                         box.markdown(f"**Image {idx + 1}:** ✅ Successfully uploaded • [Drive]({url})")
                         results.append({"filename": filename, "catalog": selected_catalog, "url": url, "status": "success"})
                     except Exception as e:
-                        box.error(f"**Image {idx + 1}:** ❌ Error: {e}")
+                        error_msg = f"❌ Error processing {uploaded_file.name}: {str(e)}"
+                        box.error(f"**Image {idx + 1}:** {error_msg}")
+                        st.error(error_msg)
+                        logger.error(error_msg, exc_info=True)
                         results.append({"filename": f"Image {idx+1}", "catalog": selected_catalog, "url": None, "status": "error", "error": str(e)})
 
                     progress_bar.progress((idx + 1) / len(simple_files))

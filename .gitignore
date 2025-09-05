@@ -1,0 +1,36 @@
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Credentials
+credentials.json
+token.json
+*.key
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp

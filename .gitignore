@@ -23,10 +23,13 @@ Thumbs.db
 # Streamlit
 .streamlit/secrets.toml
 
-# Credentials
+# Google Drive credentials and tokens
 credentials.json
+token.pickle
 token.json
 *.key
+service-account.json
+client_secret.json
 
 # Logs
 *.log
@@ -34,3 +37,7 @@ token.json
 # Temporary files
 *.tmp
 *.temp
+
+# Font and logo assets (add these back if you want to include them)
+fonts/
+logo/
